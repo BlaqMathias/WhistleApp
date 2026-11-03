@@ -3,6 +3,7 @@ import {useRef} from 'react';
 import {useSearchParams} from 'next/navigation';
 import PollWidget from '@/components/student/PollWidget';
 import TeamMark from './TeamMark';
+import Icon from './Icon';
 import {sideTeam} from '@/lib/sports';
 import {matchHref} from '@/lib/account';
 
@@ -18,7 +19,7 @@ export default function FixtureTabs({fixture,teams,squads,poll,account,initialTa
  }
  return <section className="fixture-tab-section">
   <div className="fixture-tabs" role="tablist" aria-label="Match information" onKeyDown={keyboard}>
-   {tabs.map(value=><button key={value} ref={el=>{buttons.current[value]=el;}} id={`tab-${value}`} role="tab" type="button" aria-selected={tab===value} aria-controls={`panel-${value}`} tabIndex={tab===value?0:-1} onClick={()=>select(value)}>{value==='squad'?'Squad':'Predictions'}</button>)}
+   {tabs.map(value=><button key={value} ref={el=>{buttons.current[value]=el;}} id={`tab-${value}`} role="tab" type="button" aria-selected={tab===value} aria-controls={`panel-${value}`} tabIndex={tab===value?0:-1} onClick={()=>select(value)}><Icon name={value==='squad'?'users':'prediction'}/>{value==='squad'?'Squad':'Predictions'}</button>)}
   </div>
   <div id="panel-predictions" className="fixture-tab-panel" role="tabpanel" aria-labelledby="tab-predictions" hidden={tab!=='predictions'}>
    <PollWidget fixture={fixture} teams={teams} poll={poll} publicView={!account} adminView={!!account?.is_admin}/>
@@ -26,7 +27,7 @@ export default function FixtureTabs({fixture,teams,squads,poll,account,initialTa
   <div id="panel-squad" className="fixture-tab-panel" role="tabpanel" aria-labelledby="tab-squad" hidden={tab!=='squad'}>
    <div className="squad-grid">{['home','away'].map(side=>{const team=sideTeam(fixture,teams,side);return <section key={side}>
     <h3 className="squad-heading"><TeamMark name={team.name} initials={team.initials} path={team.logo}/><span>{team.name}</span></h3>
-    {squads[side]?.length?<ul className="squad-list">{squads[side].map((player,index)=><li key={index}>{player.name}</li>)}</ul>:<p className="help">Squad not available</p>}
+    {squads[side]?.length?<ul className="squad-list">{squads[side].map((player,index)=><li key={index}><span className="squad-player-name">{player.name}</span>{fixture.sport==='football'&&['live','completed'].includes(fixture.status)&&<span className="squad-player-stats">{[['goals','football','goal'],['assists','assist','assist']].map(([field,icon,label])=>player[field]>0&&<span className="player-match-stat" role="img" aria-label={`${player[field]} ${label}${player[field]===1?'':'s'}`} title={`${player[field]} ${label}${player[field]===1?'':'s'}`} key={field}><Icon name={icon}/>{player[field]>1&&<small aria-hidden="true">{player[field]}</small>}</span>)}</span>}</li>)}</ul>:<p className="help">Squad not available</p>}
    </section>;})}</div>
   </div>
  </section>;

@@ -10,6 +10,7 @@ import FixtureEvents from '@/components/shared/FixtureEvents';
 import FixtureTabs from '@/components/shared/FixtureTabs';
 import StandingsPreview from '@/components/shared/StandingsPreview';
 import Refresh from '@/components/shared/Refresh';
+import LeagueMark from '@/components/shared/LeagueMark';
 
 export const dynamic='force-dynamic';
 export const metadata={title:'Match centre'};
@@ -28,6 +29,6 @@ export default async function Match({params,searchParams}) {
   <MatchBoard fixture={fixture} teams={teams} leagues={league?[league]:[]} featured showPlayerDetails={false}/>
   <FixtureEvents fixture={fixture} teams={teams}/>
   <FixtureTabs fixture={fixture} teams={teams} squads={squads} poll={poll} account={viewer} initialTab={initialTab}/>
-  {league&&<section className="fixture-league-table"><div className="section-header"><h2>Standings</h2><span className="help">{league.name}</span></div><StandingsPreview league={league} standings={standings}/></section>}
+  {league&&<section className="fixture-league-table"><div className="section-header"><h2>Standings</h2><span className="league-heading help"><LeagueMark league={league}/>{league.name}</span></div><StandingsPreview league={league} standings={standings}/></section>}
  </main></div>;
 }

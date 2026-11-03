@@ -4,6 +4,95 @@ import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 
+test('League logos enforce active ownership, remain visible in projections and survive repeatable migration',async t=>{
+ const db=await database();t.after(()=>db.close());const p=[];
+ for(let i=1;i<=2;i++)p.push((await register(db,i)).profile.id);
+ const ts=await teams(db,'football',p),l=await league(db,'football',ts),other=await call(db,'admin_create_league',{p_name:'Other logo league',p_sport:'football',p_season:'2026',p_team_ids:ts});
+ const path=`leagues/${l}/${randomUUID()}.png`;await db.query("insert into storage.objects(bucket_id,name) values('team-logos',$1)",[path]);
+ await call(db,'admin_set_logo',{p_entity:'leagues',p_id:l,p_path:path});
+ assert.equal((await row(db,'select logo_path from leagues where id=$1',[l])).logo_path,path);
+ assert.equal((await call(db,'public_home')).leagues.find(x=>x.id===l).logo_path,path);
+ const f=await row(db,'select id from fixtures where league_id=$1 limit 1',[l]);assert.equal((await call(db,'public_fixture',{p_fixture_id:f.id})).league.logo_path,path);
+ assert.equal((await call(db,'student_overview',{p_student_id:p[0]})).leagues.find(x=>x.id===l).logo_path,path);
+ await assert.rejects(call(db,'admin_set_logo',{p_entity:'leagues',p_id:other,p_path:path}));
+ await assert.rejects(call(db,'admin_set_logo',{p_entity:'teams',p_id:ts[0],p_path:path}));
+ await assert.rejects(call(db,'admin_set_logo',{p_entity:'leagues',p_id:l,p_path:`leagues/${l}/${randomUUID()}.png`}));
+ const before=(await db.query('select * from fixtures order by id')).rows;
+ for(let i=0;i<2;i++)await db.exec(await file('migrations/20261103060000_league_logos.sql'));
+ assert.deepEqual((await db.query('select * from fixtures order by id')).rows,before);
+ assert.equal((await row(db,'select logo_path from leagues where id=$1',[l])).logo_path,path);
+ for(const role of ['anon','authenticated']){
+  await db.exec('set role '+role);await assert.rejects(call(db,'admin_set_logo',{p_entity:'leagues',p_id:l,p_path:null}),{code:'42501'});await db.exec('reset role');
+ }
+ await call(db,'admin_set_logo',{p_entity:'leagues',p_id:l,p_path:null});assert.equal((await row(db,'select logo_path from leagues where id=$1',[l])).logo_path,null);
+ await call(db,'admin_archive',{p_entity:'leagues',p_id:l});await assert.rejects(call(db,'admin_set_logo',{p_entity:'leagues',p_id:l,p_path:path}));
+});
+
+
+test('Fixture squad stats follow player identities, preserve match participants and hide voided stats',async t=>{
+ const db=await database();t.after(()=>db.close());const p=[];
+ for(let i=1;i<=5;i++)p.push((await register(db,i,{metadata:{name:i<=2?'Same Name':`Player ${i}`}})).profile.id);
+ const h=await call(db,'admin_save_team',{p_id:null,p_name:'Scoring Home',p_sport:'football',p_student_ids:[p[0],p[1],p[4]]});
+ const a=await call(db,'admin_save_team',{p_id:null,p_name:'Scoring Away',p_sport:'football',p_student_ids:[p[2],p[3]]});
+ const l=await league(db,'football',[h,a]);
+ const f=(await row(db,'select id from fixtures where league_id=$1 and home_team_id=$2',[l,h])).id;
+ let view=await call(db,'public_fixture',{p_fixture_id:f});
+ assert.ok(view.squads.home.every(x=>x.goals===0&&x.assists===0));
+ await call(db,'admin_start',{p_fixture_id:f});
+ for(let i=0;i<2;i++)await call(db,'admin_score',{p_fixture_id:f,p_side:'home',p_increment:1});
+ const player=(side,id)=>({side,student_id:id});
+ const details={man_of_the_match:null,goals:Array.from({length:2},()=>({side:'home',scorer:player('home',p[0]),assist:player('home',p[1])}))};
+ await call(db,'admin_save_player_details',{p_fixture_id:f,p_details:details});
+ view=await call(db,'public_fixture',{p_fixture_id:f});
+ assert.deepEqual(view.squads.home.filter(x=>x.name==='Same Name').map(x=>[x.goals,x.assists]).sort(),[[0,2],[2,0]]);
+ assert.ok(view.squads.away.every(x=>x.goals===0&&x.assists===0));
+ assert.deepEqual(view.squads.home.find(x=>x.name==='Player 5'),{name:'Player 5',goals:0,assists:0});
+ for(const id of p)assert.ok(!JSON.stringify(view.squads).includes(id));
+ await call(db,'admin_end',{p_fixture_id:f});
+ await call(db,'admin_save_team',{p_id:h,p_name:'Scoring Home',p_sport:'football',p_student_ids:[p[1],p[4]]});
+ view=await call(db,'public_fixture',{p_fixture_id:f});
+ assert.equal(view.squads.home.length,3,'recorded scorer remains visible after leaving current roster');
+ assert.ok(view.squads.home.some(x=>x.goals===2));
+ const temporary=await call(db,'admin_create_friendly',{p_sport:'football',p_home_name:'Typed Highlight Home',p_away_name:'Typed Highlight Away'});
+ await call(db,'admin_start',{p_fixture_id:temporary});await call(db,'admin_score',{p_fixture_id:temporary,p_side:'home',p_increment:1});
+ await call(db,'admin_save_player_details',{p_fixture_id:temporary,p_details:{man_of_the_match:null,goals:[{side:'home',scorer:{side:'home',name:'Typed Scorer'},assist:{side:'home',name:'Typed Creator'}}]}});
+ const typed=await call(db,'public_fixture',{p_fixture_id:temporary});
+ assert.deepEqual(typed.squads.home,[{name:'Typed Creator',goals:0,assists:1},{name:'Typed Scorer',goals:1,assists:0}]);
+ await call(db,'admin_cancel',{p_fixture_id:temporary,p_reason:'Abandoned'});
+ assert.deepEqual((await call(db,'public_fixture',{p_fixture_id:temporary})).squads,{home:[],away:[]});
+ const before=(await db.query('select * from fixtures order by id')).rows;
+ for(let i=0;i<2;i++)await db.exec(await file('migrations/20261103050000_squad_match_stats.sql'));
+ assert.deepEqual((await db.query('select * from fixtures order by id')).rows,before);
+ for(const role of ['anon','authenticated']){
+  await db.exec('set role '+role);
+  await assert.rejects(call(db,'whistle_fixture_squad',{p_fixture_id:f,p_side:'home'}),{code:'42501'});
+  await assert.rejects(call(db,'public_fixture',{p_fixture_id:f}),{code:'42501'});
+  await db.exec('reset role');
+ }
+ await db.exec('set role service_role');
+ assert.equal((await call(db,'whistle_fixture_squad',{p_fixture_id:f,p_side:'home'})).length,3);
+});
+
+test('Fresh and add-on samples contain completed scorer/assist data and can be rerun without changing matches or Ws',async t=>{
+ const db=await database();t.after(()=>db.close());
+ for(let i=1;i<=4;i++){const p=await register(db,i);await db.query('update students set is_demo=true where id=$1',[p.profile.id]);}
+ await db.exec(await file('seed_match_highlights.sql'));
+ const sample=await row(db,"select * from fixtures where home_name='Demo Goal Makers' and away_name='Demo Playmakers'");
+ assert.equal(sample.status,'completed');assert.equal(sample.home_score,3);assert.equal(sample.away_score,1);assert.equal(sample.player_details.goals.length,4);
+ const view=await call(db,'public_fixture',{p_fixture_id:sample.id});
+ assert.deepEqual(view.squads.home.map(x=>[x.goals,x.assists]).sort(),[[1,2],[2,1]]);
+ assert.deepEqual(view.squads.away.map(x=>[x.goals,x.assists]).sort(),[[0,1],[1,0]]);
+ const before=(await db.query('select * from fixtures order by id')).rows,ledger=(await db.query('select * from ws_ledger order by vote_id')).rows;
+ for(let i=0;i<2;i++)await db.exec(await file('seed_match_highlights.sql'));
+ assert.deepEqual((await db.query('select * from fixtures order by id')).rows,before);
+ assert.deepEqual((await db.query('select * from ws_ledger order by vote_id')).rows,ledger);
+ await db.exec(await file('seed.sql'));
+ assert.equal((await row(db,"select count(*)::int n from fixtures where home_name='Demo Goal Makers' and away_name='Demo Playmakers'")).n,1);
+ await db.query('delete from team_players where team_id in ($1,$2)',[sample.home_team_id,sample.away_team_id]);
+ assert.equal((await call(db,'public_fixture',{p_fixture_id:sample.id})).squads.home.length,2);
+});
+
+
 const file = name => readFile(new URL('../supabase/'+name, import.meta.url),'utf8');
 async function database() {
   const db = new PGlite();
@@ -236,7 +325,7 @@ test('Sample data installs atomically on a fresh schema and rejects a second see
  await db.exec(await file('seed.sql'));
  assert.equal((await row(db,'select count(*)::int n from leagues')).n,3);
  assert.equal((await row(db,'select count(*)::int n from fixtures where league_id is not null')).n,36);
- assert.equal((await row(db,'select count(*)::int n from fixtures where league_id is null')).n,3);
+ assert.equal((await row(db,'select count(*)::int n from fixtures where league_id is null')).n,4);
  assert.equal((await row(db,'select count(*)::int n from ws_leaderboard where ws<0')).n,2);
  await assert.rejects(db.exec(await file('seed.sql')));await db.exec('rollback');
 

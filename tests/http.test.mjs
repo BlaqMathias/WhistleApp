@@ -78,6 +78,26 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    assert.equal((await request('/api/logos/upload',{session:admin,body:{entity:'teams',id:teamIds[0],type:'image/png',size:2097153}})).status,400);
    await value('/api/logos',{session:admin,method:'DELETE',body:{entity:'teams',id:teamIds[0]}});d=await value('/api/admin-data',{session:admin});assert.equal(d.teams.find(t=>t.id===teamIds[0]).logo_path,null);
   });
+  await t.test('League logo upload, replacement, removal, student visibility and archive guards are connected',async()=>{
+   const id=(await value('/api/leagues',{session:admin,body:{name:'Logo league '+tag,sport:'football',season:'2026',team_ids:teamIds.slice(0,2)}})).id;
+   const image=await read(new URL('./fixtures/logo.png',import.meta.url));
+   const target={entity:'leagues',id};
+   assert.equal((await request('/api/logos/upload',{session:student,body:{...target,type:'image/png',size:image.length}})).status,401);
+   const upload=async()=>{const prep=await value('/api/logos/upload',{session:admin,body:{...target,type:'image/png',size:image.length}});assert.ok(prep.path.startsWith(`leagues/${id}/`));const form=new FormData();form.append('',new Blob([image],{type:'image/png'}),'logo.png');const r=await fetch(`${base}/__test_supabase/storage/v1/object/upload/sign/team-logos/${prep.path}?token=${prep.token}`,{method:'PUT',body:form});assert.equal(r.status,200);await value('/api/logos',{session:admin,body:{...target,path:prep.path}});return prep.path;};
+   const first=await upload(),second=await upload();
+   assert.equal((await request(`/__test_supabase/storage/v1/object/public/team-logos/${first}`)).status,404);
+   let d=await value('/api/admin-data',{session:admin});assert.equal(d.leagues.find(l=>l.id===id).logo_path,second);
+   let html=await (await request('/student/standings',{session:student})).text();assert.ok(html.includes(second));
+   const f=d.fixtures.find(f=>f.league_id===id);html=await (await request(`/matches/${f.id}`,{session:student})).text();assert.ok(html.includes(second));
+   html=await (await request(`/leagues/${id}`,{session:admin})).text();assert.match(html,/League logo/);assert.match(html,/Upload logo/);assert.match(html,/Use initials/);
+   assert.equal((await request('/api/logos',{session:admin,body:{entity:'leagues',id:leagueId,path:second}})).status,400);
+   await value('/api/logos',{session:admin,method:'DELETE',body:target});d=await value('/api/admin-data',{session:admin});assert.equal(d.leagues.find(l=>l.id===id).logo_path,null);
+   assert.equal((await request(`/__test_supabase/storage/v1/object/public/team-logos/${second}`)).status,404);
+   await value(`/api/leagues/${id}`,{session:admin,method:'PATCH',body:{action:'archive'}});
+   assert.equal((await request('/api/logos/upload',{session:admin,body:{...target,type:'image/png',size:image.length}})).status,409);
+   assert.equal((await request('/api/logos',{session:admin,method:'DELETE',body:target})).status,409);
+   html=await (await request('/leagues/new',{session:admin})).text();assert.match(html,/League logo \(optional\)/);
+  });
   await t.test('Draft fixture editing, immediate polls and deletion of unstarted voted fixtures',async()=>{
    const id=(await value('/api/fixtures',{session:admin,body:{league_id:leagueId,home_team_id:teamIds[0],away_team_id:teamIds[1]}})).id;
    let p=(await value(`/api/polls/${id}`,{session:student})).poll;assert.equal(p.status,'open');
@@ -138,6 +158,7 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
   await t.test('Student pages, preferences, feedback review and profile privacy are fully connected',async()=>{
    for(const path of ['/student','/student/fixtures','/student/standings','/student/live','/student/leaderboard','/student/notifications','/student/feedback','/student/profile']){
     const r=await request(path,{session:student});assert.equal(r.status,200,path);const html=await r.text();assert.ok(!html.includes('Pending payments'));assert.ok(!html.includes('Create Fest'));assert.ok(!html.includes('admin-test@topfaith.edu.ng'));
+    for(const removed of ['Include enough detail for the sports administrator','Your feedback is linked to your student account','Replies are not available in the app','Your team roster and account details are managed'])assert.ok(!html.includes(removed));
    }
    await value('/api/notifications/preferences',{session:student,method:'PATCH',body:{notifications_enabled:false}});assert.equal((await value('/api/notifications',{session:student})).notifications_enabled,false);
    await value('/api/notifications/preferences',{session:student,method:'PATCH',body:{notifications_enabled:true}});
@@ -183,6 +204,14 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    await value(`/api/fixtures/${volley}/record-result`,{session:admin,body:{home_sets:2,away_sets:0}});
    page=await (await request(`/matches/${volley}`,{session:student})).text();assert.match(page,/Friendly Captain/);assert.match(page,/Man of the Match/);
   });
+  await t.test('Sample match renders goal balls, assist boots and multiple-goal counts in side-by-side squads',async()=>{
+   const d=await value('/api/admin-data',{session:admin});
+   const f=d.fixtures.find(f=>f.home_name==='Demo Goal Makers'&&f.away_name==='Demo Playmakers');assert.ok(f);assert.equal(f.status,'completed');
+   const r=await request(`/matches/${f.id}?tab=squad`,{session:student});assert.equal(r.status,200);const html=await r.text();
+   for(const label of ['2 goals','1 goal','2 assists','1 assist'])assert.ok(html.includes(`aria-label="${label}"`),label);
+   assert.match(html,/squad-player-stats/);assert.match(html,/squad-grid/);
+   assert.ok(!html.includes('student1@topfaith.edu.ng'));assert.ok(!html.includes('student4@topfaith.edu.ng'));
+  });
   await t.test('Signed-in fixture pages retain squads, tabs and form; guest deep links preserve a safe login return',async()=>{
    const d=await value('/api/admin-data',{session:admin});
    const f=d.fixtures.find(f=>f.league_id===leagueId&&f.status==='scheduled');
@@ -210,6 +239,28 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    assert.equal((await request(`/api/polls/${f.id}`)).status,401);
    assert.equal((await request(`/api/polls/${f.id}`,{session:admin})).status,200);
    assert.equal((await request('/student',{session:admin})).status,307);
+  });
+  await t.test('Shared search filters fixture/live cards and league tables by league/team; quick-prediction reads retain role checks',async()=>{
+   const d=await value('/api/admin-data',{session:admin}),l=d.leagues.find(l=>l.name==='Demo Football League'),team=d.teams.find(t=>t.sport==='football'&&t.name==='Demo Falcons');
+   const cards=html=>[...html.matchAll(/<article class="fixture-item[^"]*"[\s\S]*?<\/article>/g)].map(m=>m[0]);
+   let r=await request('/student/fixtures?q=demofootballleague',{session:student});assert.equal(r.status,200);let html=await r.text();
+   assert.equal(cards(html).length,d.fixtures.filter(f=>f.league_id===l.id).length);assert.ok(cards(html).every(c=>c.includes('Demo Football League')));
+   assert.match(html,/Search leagues or teams/);assert.match(html,/Advanced search/);assert.ok(!html.includes('Apply filters'));assert.ok(!html.includes('class="fixture-filters"'));
+   html=await (await request(`/student/fixtures?team=${team.id}&q=Demo%20Falcons`,{session:student})).text();assert.equal(cards(html).length,d.fixtures.filter(f=>[f.home_team_id,f.away_team_id].includes(team.id)).length);
+   html=await (await request('/student/fixtures?q=no-matching-team-ever',{session:student})).text();assert.equal(cards(html).length,0);
+   html=await (await request('/student/live?q=Demo%20Football%20League',{session:student})).text();assert.match(html,/Search leagues or teams/);assert.ok(!/<article[^>]*>[\s\S]*?Demo Basketball League[\s\S]*?<\/article>/.test(html));
+   html=await (await request(`/student/standings?team=${team.id}`,{session:student})).text();assert.match(html,/<h2>Demo Football League<\/h2>/);assert.ok(!/<h2>Demo (?:Basketball|Volleyball) League<\/h2>/.test(html));assert.match(html,/Advanced search/);
+   const f=d.fixtures.find(f=>f.status==='scheduled');assert.equal((await value(`/api/polls/${f.id}`,{session:student})).can_predict,true);assert.equal((await value(`/api/polls/${f.id}`,{session:admin})).can_predict,false);
+   html=await (await request('/student',{session:student})).text();assert.match(html,/Campus sports, all in one place/);assert.match(html,/Find the action/);assert.match(html,/campus-leaderboard/);assert.ok(!/Topfaith University \/ .*?live now/.test(html));
+   html=await (await request('/student/leaderboard',{session:student})).text();assert.ok(!html.includes('correct of'));assert.ok(!html.includes('settled'));
+  });
+  await t.test('Platform labels, closing hero, percentage-only tallies and cleaner goal/card text render correctly',async()=>{
+   let html=await (await request('/student',{session:student})).text();assert.match(html,/<p>Campus sports platform<\/p>/);assert.ok(!html.includes("'s campus sports"));assert.match(html,/Back your side/);assert.match(html,/Own the call/);assert.ok(html.indexOf('home-closing-hero')>html.indexOf('Standings glance'));assert.ok(!/\d+<!-- --> open predictions/.test(html));
+   html=await (await request('/student/fixtures',{session:student})).text();assert.ok(!html.includes('Round '));assert.match(html,/TU sports platform/);
+   const d=await value('/api/admin-data',{session:admin}),f=d.fixtures.find(f=>f.home_name==='Demo Goal Makers');html=await (await request(`/matches/${f.id}?tab=predictions`,{session:student})).text();
+   const highlights=html.match(/<section class="fixture-events"[\s\S]*?<\/section>/)?.[0];assert.ok(highlights);assert.ok(!highlights.includes('Assist:'));assert.ok(html.includes('aria-label="1 assist"'));
+   const bars=[...html.matchAll(/<progress[^>]+aria-label="([^"]+)"/g)];assert.ok(bars.length);assert.ok(bars.every(m=>m[1].endsWith('%')));assert.ok(!bars.some(m=>m[1].includes('votes')));
+   const sprite=await request('/icons/ui-icons.svg');assert.equal(sprite.status,200);const svg=await sprite.text();for(const id of ['football','assist','search','users'])assert.ok(svg.includes(`id="${id}"`));
   });
   await t.test('Logout clears the session cookies',async()=>{
    const r=await request('/api/auth/logout',{session:student,method:'POST'});assert.equal(r.status,303);assert.ok(r.headers.getSetCookie().some(h=>/Max-Age=0/.test(h)));

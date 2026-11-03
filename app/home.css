@@ -84,10 +84,16 @@
 .fixture-tab-panel[hidden] { display: none; }
 .squad-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .squad-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
-.squad-heading > span { min-width: 0; overflow-wrap: anywhere; }
-.squad-heading .team-mark { width: 32px; height: 32px; flex-shrink: 0; }
+.squad-heading > span:not(.team-mark) { min-width: 0; overflow-wrap: anywhere; }
+.squad-heading .team-mark { width: 32px; height: 32px; flex-shrink: 0; font-size: 13px; white-space: nowrap; }
 .squad-list { list-style: none; padding: 0; margin: 16px 0 0; }
-.squad-list li { padding: 12px 0; font-size: 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.squad-list li { display: flex; align-items: flex-start; gap: 8px; padding: 12px 0; font-size: 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.squad-player-name { flex: 1; min-width: 0; }
+.squad-player-stats { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 58px; }
+.squad-player-stats:empty { display: none; }
+.player-match-stat { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.player-match-stat .icon { width: 14px; height: 14px; }
+.player-match-stat small { font-size: 10px; line-height: 1; }
 .fixture-events { margin-top: 20px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
 .fixture-events h2 { font-size: 16px; margin-bottom: 20px; }
 .goal-lines { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }

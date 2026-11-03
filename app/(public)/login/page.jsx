@@ -23,7 +23,7 @@ export default async function Login({ searchParams }) {
             starts here.
           </h1>
           <p>
-            Topfaith University
+            TU sports platform
             <br />
             Campus sports
           </p>

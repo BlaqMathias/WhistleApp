@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import {getStudentOverview} from '@/lib/studentData';
-import {SPORTS,SPORT_NAMES} from '@/lib/constants';
+import {SPORT_NAMES} from '@/lib/constants';
+import {selectLeagueTables,sportsSearchOptions} from '@/lib/fixtures';
+import SportsSearch from '@/components/shared/SportsSearch';
 import StandingsPreview from '@/components/shared/StandingsPreview';
 import Refresh from '@/components/shared/Refresh';
 import EmptyState from '@/components/shared/EmptyState';
-import Button from '@/components/shared/Button';
+import LeagueMark from '@/components/shared/LeagueMark';
 export const metadata={title:'Standings'};
-export default async function Standings({searchParams}){const {data:d}=await getStudentOverview(),q=await searchParams,sport=SPORTS.includes(q.sport)?q.sport:'',available=d.leagues.filter(l=>!sport||l.sport===sport),league=available.some(l=>l.id===q.league)?q.league:'',leagues=available.filter(l=>!league||l.id===league);return <><Refresh/><div className="page-heading"><div><h1>Standings</h1><p>The league tables, with your teams highlighted.</p></div></div><form className="fixture-filters" method="get" action="/student/standings" key={`${sport}:${league}`}><fieldset className="filter-chips"><legend>Sport</legend><div className="chip-row">{[["","All sports"],...SPORTS.map(s=>[s,SPORT_NAMES[s]])].map(([value,label])=><label className="chip" key={value}><input className="sr-only" type="radio" name="sport" value={value} defaultChecked={sport===value}/>{label}</label>)}</div></fieldset><label>League<select name="league" defaultValue={league}><option value="">All leagues</option>{available.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label><div className="actions"><Button>Apply filters</Button><Link className="quiet-link" href="/student/standings">Clear filters</Link></div></form>{leagues.length?leagues.map(l=><section className="section" key={l.id}><div className="section-header"><div><h2>{l.name}</h2><p className="help">{SPORT_NAMES[l.sport]} / {l.season}</p></div><Link className="quiet-link" href={`/student/fixtures?league=${l.id}`}>View fixtures</Link></div><StandingsPreview league={l} standings={d.standings.filter(r=>r.league_id===l.id)} myTeamIds={d.my_team_ids}/></section>):<EmptyState title="No matching active leagues">Choose another filter or return when a league is created.</EmptyState>}</>;}
+export default async function Standings({searchParams}){
+ const {data:d}=await getStudentOverview(),{leagues,...selection}=selectLeagueTables(d,await searchParams);
+ return <><Refresh/><div className="page-heading"><h1>Standings</h1></div>
+  <SportsSearch key={JSON.stringify(selection)} selection={selection} leagues={d.leagues} options={sportsSearchOptions(d,{tables:true})} action="/student/standings" mode="tables"/>
+  {leagues.length?leagues.map(l=><section className="section" key={l.id}><div className="section-header"><div className="league-heading"><LeagueMark league={l}/><div><h2>{l.name}</h2><p className="help">{SPORT_NAMES[l.sport]} / {l.season}</p></div></div><Link className="quiet-link" href={`/student/fixtures?league=${l.id}`}>View fixtures</Link></div><StandingsPreview league={l} standings={d.standings.filter(r=>r.league_id===l.id)} myTeamIds={d.my_team_ids}/></section>):<EmptyState title="No matching active leagues">Search for another team or league.</EmptyState>}
+ </>;
+}

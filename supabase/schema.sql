@@ -36,7 +36,7 @@ create table public.team_players (
 );
 create table public.leagues (
  id uuid primary key default gen_random_uuid(), name text not null check(length(trim(name)) between 1 and 160),
- sport public.sport not null, season text not null check(length(trim(season)) between 1 and 80),
+ sport public.sport not null, season text not null check(length(trim(season)) between 1 and 80), logo_path text,
  best_of integer, status public.archive_status not null default 'active',
  generated_at timestamptz, created_at timestamptz not null default now(),
  check((sport='volleyball' and best_of is not null and best_of in (3,5)) or (sport<>'volleyball' and best_of is null))
@@ -453,20 +453,22 @@ end $$;
 create function public.admin_set_logo(p_entity text,p_id uuid,p_path text,p_side text default null) returns void language plpgsql set search_path=public as $$
 declare expected text;
 begin
- if p_entity='teams' then expected:='teams/'||p_id::text||'/';
+ if p_entity in ('teams','leagues') then expected:=p_entity||'/'||p_id::text||'/';
  elsif p_entity='fixtures' and p_side in ('home','away') then expected:='fixtures/'||p_id::text||'/'||p_side||'/';
- else raise exception 'Choose a team or fixture side.'; end if;
+ else raise exception 'Choose a team, league or fixture side.'; end if;
  if p_path is not null then
   if p_path !~ ('^'||expected||'[0-9a-f-]{36}\.(png|jpg|webp)$')
-    or not exists(select 1 from storage.objects where bucket_id='team-logos' and name=p_path) then raise exception 'Upload a valid team logo first.'; end if;
+    or not exists(select 1 from storage.objects where bucket_id='team-logos' and name=p_path) then raise exception 'Upload a valid logo first.'; end if;
  end if;
- if p_entity='teams' then
+ if p_entity='leagues' then
+  update leagues set logo_path=p_path where id=p_id and status='active';
+ elsif p_entity='teams' then
   update teams set logo_path=p_path where id=p_id and status='active';
  else
   if p_side='home' then update fixtures set home_logo_path=p_path where id=p_id;
   else update fixtures set away_logo_path=p_path where id=p_id; end if;
  end if;
- if not found then raise exception 'Team or match not found.'; end if;
+ if not found then raise exception 'Active team, league or match not found.'; end if;
 end $$;
 create function public.admin_archive(p_entity text,p_id uuid) returns void language plpgsql set search_path=public as $$
 begin
@@ -762,6 +764,45 @@ create or replace function public.public_home() returns jsonb language sql set s
  'standings',(select coalesce(jsonb_agg(to_jsonb(s)||jsonb_build_object('form',whistle_recent_form(s.league_id,s.team_id)) order by league_id,rank,name),'[]') from standings s where exists(select 1 from leagues l where l.id=s.league_id and l.status='active')),
  'polls',(select coalesce(jsonb_agg(whistle_poll_snapshot(f.id)),'[]') from fixtures f where f.league_id is null or exists(select 1 from leagues l where l.id=f.league_id and l.status='active')))
 $$;
+-- Match-only totals are calculated from validated identities before display data is sanitized.
+-- Current roster plus recorded participants keeps highlights visible after a roster change.
+create or replace function public.whistle_fixture_squad(p_fixture_id uuid,p_side text)
+returns jsonb language plpgsql set search_path=public as $$
+declare f fixtures; v_team uuid; goals jsonb:='[]'; players jsonb;
+begin
+ if p_side not in ('home','away') or p_side is null then raise exception 'Choose a match side.'; end if;
+ select * into strict f from fixtures where id=p_fixture_id;
+ v_team:=case when p_side='home' then f.home_team_id else f.away_team_id end;
+ if f.sport='football' and f.status in ('live','completed') then
+  goals:=coalesce(f.player_details->'goals','[]'::jsonb);
+ end if;
+ with roster as (
+  select s.id,s.name from students s where not s.is_admin and
+   ((f.league_id is not null and exists(select 1 from league_players lp where lp.league_id=f.league_id and lp.team_id=v_team and lp.student_id=s.id))
+    or (f.league_id is null and exists(select 1 from team_players tp where tp.team_id=v_team and tp.student_id=s.id)))
+ ), recorded as (
+  select distinct on (coalesce(p->>'student_id',lower(trim(p->>'name'))))
+   (p->>'student_id')::uuid id,trim(p->>'name') name
+  from jsonb_array_elements(goals) g
+  cross join lateral (values(g->'scorer'),(g->'assist')) participant(p)
+  where g->>'side'=p_side and p is not null and p<>'null'::jsonb
+  order by coalesce(p->>'student_id',lower(trim(p->>'name'))),trim(p->>'name')
+ ), participants as (
+  select * from roster
+  union all select r.* from recorded r where r.id is null or not exists(select 1 from roster s where s.id=r.id)
+ )
+ select coalesce(jsonb_agg(jsonb_build_object('name',p.name,
+  'goals',(select count(*) from jsonb_array_elements(goals) g where g->>'side'=p_side and
+   case when p.id is not null then g->'scorer'->>'student_id'=p.id::text
+    else g->'scorer'->>'student_id' is null and lower(trim(g->'scorer'->>'name'))=lower(p.name) end),
+  'assists',(select count(*) from jsonb_array_elements(goals) g where g->>'side'=p_side and
+   case when p.id is not null then g->'assist'->>'student_id'=p.id::text
+    else g->'assist'->>'student_id' is null and lower(trim(g->'assist'->>'name'))=lower(p.name) end)
+ ) order by p.name,p.id),'[]'::jsonb) into players from participants p;
+ return players;
+end $$;
+
+
 create or replace function public.public_fixture(p_fixture_id uuid,p_student_id uuid default null)
 returns jsonb language plpgsql set search_path=public as $$
 declare f fixtures; squads jsonb:='{}'; v_side text; v_team uuid; players jsonb;
@@ -771,10 +812,7 @@ begin
  if p_student_id is not null then perform whistle_student(p_student_id); end if;
  foreach v_side in array array['home','away'] loop
   v_team:=case when v_side='home' then f.home_team_id else f.away_team_id end;
-  select coalesce(jsonb_agg(jsonb_build_object('name',s.name) order by s.name,s.id),'[]') into players
-   from students s where not s.is_admin and
-   ((f.league_id is not null and exists(select 1 from league_players lp where lp.league_id=f.league_id and lp.team_id=v_team and lp.student_id=s.id))
-    or (f.league_id is null and exists(select 1 from team_players tp where tp.team_id=v_team and tp.student_id=s.id)));
+  players:=whistle_fixture_squad(f.id,v_side);
   squads:=squads||jsonb_build_object(v_side,players);
  end loop;
  return jsonb_build_object(
@@ -784,6 +822,8 @@ begin
   'standings',case when f.league_id is not null then admin_standings(f.league_id) else '[]'::jsonb end,
   'squads',squads,'poll',whistle_poll_snapshot(f.id,p_student_id));
 end $$;
+revoke execute on function public.whistle_fixture_squad(uuid,text),public.public_fixture(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.whistle_fixture_squad(uuid,text),public.public_fixture(uuid,uuid) to service_role;
 revoke execute on function public.whistle_recent_form(uuid,uuid),public.admin_standings(uuid),public.public_home(),public.public_fixture(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.whistle_recent_form(uuid,uuid),public.admin_standings(uuid),public.public_home(),public.public_fixture(uuid,uuid) to service_role;
 

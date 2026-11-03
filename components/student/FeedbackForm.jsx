@@ -29,10 +29,9 @@ export default function FeedbackForm() {
       <h2>Share your feedback</h2>
       <fieldset><legend>Category</legend><div className="chip-row">{Object.entries(FEEDBACK_CATEGORIES).map(([value, label]) => <label className="chip" key={value}><input className="sr-only" type="radio" name="category" value={value} required disabled={mutation.pending}/>{label}</label>)}</div></fieldset>
       <label>Message
-        <textarea name="message" value={message} onChange={(event) => setMessage(event.target.value)} maxLength={FEEDBACK_MAX_LENGTH} required disabled={mutation.pending} aria-describedby="feedback-help feedback-count" placeholder="Tell us what would help, what went wrong, or how to reproduce a bug." />
+        <textarea name="message" value={message} onChange={(event) => setMessage(event.target.value)} maxLength={FEEDBACK_MAX_LENGTH} required disabled={mutation.pending} aria-describedby="feedback-count" placeholder="Tell us what would help, what went wrong, or how to reproduce a bug." />
       </label>
-      <div><p className="help" id="feedback-help">Include enough detail for the sports administrator to understand your feedback.</p><p className="help" id="feedback-count">{message.length.toLocaleString("en-NG")} / {FEEDBACK_MAX_LENGTH.toLocaleString("en-NG")} characters</p></div>
-      <p className="form-note">Your feedback is linked to your student account and sent to the sports administrator. Replies are not available in the app.</p>
+      <p className="help" id="feedback-count">{message.length.toLocaleString("en-NG")} / {FEEDBACK_MAX_LENGTH.toLocaleString("en-NG")} characters</p>
       <FormStatus error={mutation.error} success={mutation.success} />
       <Button disabled={mutation.pending}>{mutation.pending ? "Sending…" : "Send feedback"}</Button>
     </form>

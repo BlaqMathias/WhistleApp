@@ -6,7 +6,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import Icon from '@/components/shared/Icon';
 export const metadata = {title: 'Ws leaderboard'};
 function RankRow({row: r, pinned = false}) {
-  return <div className={`leader-row${r.is_me ? ' my-team-row' : ''}${pinned ? ' pinned-rank' : ''}`}><span className={`rank-mark${r.rank <= 3 ? ' top-rank' : ''}`}>{r.rank}</span><div className="leader-details"><strong>{r.name}{r.is_me ? ' · You' : ''}</strong><small>{r.faculty} / {r.correct} correct of {r.predictions} settled</small></div><span className={`leader-ws${r.ws < 0 ? ' ws-negative' : ''}`}>{wsText(r.ws)}</span></div>;
+  return <div className={`leader-row${r.is_me ? ' my-team-row' : ''}${pinned ? ' pinned-rank' : ''}`}><span className={`rank-mark${r.rank <= 3 ? ' top-rank' : ''}`}>{r.rank}</span><div className="leader-details"><strong>{r.name}{r.is_me ? ' · You' : ''}</strong><small>{r.faculty}</small></div><span className={`leader-ws${r.ws < 0 ? ' ws-negative' : ''}`}>{wsText(r.ws)}</span></div>;
 }
 export default async function Leaderboard() {
   const {data: rows} = await getStudentLeaderboard(), me = rows.find(r => r.is_me);

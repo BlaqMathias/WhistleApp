@@ -21,7 +21,7 @@ export default function PublicHeader({account}) {
  const links=<><Link href={account?.is_admin?'/dashboard':'/student/live'} onClick={close}>Scores</Link><Link href={account?.is_admin?'/friendlies':'/student/fixtures'} onClick={close}>Fixtures</Link><Link href={account?.is_admin?'/leagues':'/student/standings'} onClick={close}>Standings</Link></>;
  const accountLinks=account?<Link href={accountHome(account)} className="button" onClick={close}>Open your overview</Link>:<><Link href="/login" className="quiet-link" onClick={close}>Log in</Link><Link href="/signup" className="button" onClick={close}>Join Whistle</Link></>;
  return <header className="public-header">
-  <Link className="brand" href={account?accountHome(account):'/login'} aria-label="Whistle home"><Logo/><span className="public-campus">Topfaith University</span></Link>
+  <Link className="brand" href={account?accountHome(account):'/login'} aria-label="Whistle home"><Logo/><span className="public-campus">TU sports platform</span></Link>
   <nav className="public-nav" aria-label="Homepage navigation">{links}</nav>
   <div className="actions public-desktop-actions"><ThemeToggle/>{accountLinks}</div>
   <button className="icon-button public-menu-button" type="button" aria-label="Open menu" aria-haspopup="dialog" aria-controls="mobile-menu" aria-expanded={open} onClick={()=>{dialog.current.showModal();setOpen(true);}}><Icon name="menu"/></button>
