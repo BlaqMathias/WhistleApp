@@ -1,0 +1,10 @@
+import TeamMark from './TeamMark';
+const columns={football:[['played','MP'],['wins','W'],['draws','D'],['losses','L'],['scored','GF'],['conceded','GA'],['difference','GD'],['points','Pts']],basketball:[['played','GP'],['wins','W'],['losses','L'],['draws','D'],['pct','PCT'],['scored','PF'],['conceded','PA'],['difference','Diff']],volleyball:[['played','MP'],['wins','W'],['losses','L'],['sets_won','SW'],['sets_lost','SL'],['set_difference','SD'],['points','Pts']]};
+function Form({games=[]}) {
+ const entries=[...Array(Math.max(0,5-games.length)).fill(null),...games.slice(-5)];
+ return <span className="form-five" aria-label="Last five league games, most recent last">{entries.map((game,index)=><span className={`form-dot ${game?'form-'+game.result:'form-empty'}${game&&index===4?' latest':''}`} key={index} title={game?`${game.result==='W'?'Win':game.result==='L'?'Loss':'Draw'} vs ${game.opponent}: ${game.score}`:'No game'} aria-label={game?`${game.result==='W'?'Win':game.result==='L'?'Loss':'Draw'} vs ${game.opponent}, ${game.score}`:'No game'}>{game?.result==='W'?'✓':game?.result==='L'?'×':'−'}</span>)}</span>;
+}
+export default function StandingsPreview({league,standings,myTeamIds=[],maxRows,caption}) {
+ const rows=maxRows?standings.slice(0,maxRows):standings;
+ return <div className="table-wrap standings"><table>{caption&&<caption>{caption}</caption>}<thead><tr><th>Team / Rank</th>{columns[league.sport].map(([key,label])=><th key={key} className="numeric">{label}</th>)}<th>Last 5</th></tr></thead><tbody>{rows.map(r=><tr key={r.team_id} className={myTeamIds.includes(r.team_id)?'my-team-row':undefined}><td><span className="team-cell"><span className={`rank-mark${r.rank<=3?' top-rank':''}`}>{r.rank}</span><TeamMark name={r.name} initials={r.logo_initials} path={r.logo_path}/><strong>{r.name}</strong>{myTeamIds.includes(r.team_id)&&<span className="table-sub">Your team</span>}</span></td>{columns[league.sport].map(([key])=><td className="numeric" key={key}>{key==='pct'?Number(r[key]).toFixed(3):r[key]}</td>)}<td><Form games={r.form}/></td></tr>)}</tbody></table></div>;
+}

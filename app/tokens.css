@@ -1,0 +1,88 @@
+:root {
+  --bg: #F4F1E8;
+  --table-head: #12372A;
+  --on-table-head: #F4F1E8;
+  --form-win: #24864A;
+  --form-loss: #CC3D46;
+  --on-form: #FFFFFF;
+  --surface: #FBFAF5;
+  --surface-2: #ECE8DC;
+  --ink: #0F1A14;
+  --ink-muted: #5B655E;
+  --line: #DAD5C6;
+  --brand: #12372A;
+  --on-brand: #F4F1E8;
+  --accent: #C8F03C;
+  --on-accent: #0F1A14;
+  --link: #1B4332;
+  --hot: #D6245F;
+  --on-hot: #FFFFFF;
+  --blue: #1F4FD8;
+  --on-blue: #FFFFFF;
+  --pitch: #24583C;
+  --court-amber: #A35B19;
+  --court-line: #FBFAF5;
+  --shadow: 0 12px 32px -18px rgb(15 26 20 / .35);
+  --featured: #12372A;
+  --on-featured: #F4F1E8;
+  --font-display: var(--font-bricolage), Arial, sans-serif;
+  --font-body: var(--font-poppins), Arial, sans-serif;
+  --r-card: 24px;
+  --r-inner: 16px;
+  --r-pill: 999px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0D100E;
+  --table-head: #B7DEC8;
+  --on-table-head: #12372A;
+  --surface: #161A17;
+  --surface-2: #1F2521;
+  --ink: #F1F3EC;
+  --ink-muted: #9AA39C;
+  --line: #2A312C;
+  --brand: #17412F;
+  --on-brand: #F1F3EC;
+  --accent: #C8F03C;
+  --on-accent: #0F1A14;
+  --link: #C8F03C;
+  --hot: #FF5C7C;
+  --on-hot: #0D100E;
+  --blue: #6C93FF;
+  --on-blue: #0D100E;
+  --pitch: #24583C;
+  --court-amber: #A35B19;
+  --court-line: #FBFAF5;
+  --shadow: none;
+  --featured: #C8F03C;
+  --on-featured: #0F1A14;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --bg: #0D100E;
+  --table-head: #B7DEC8;
+  --on-table-head: #12372A;
+  --surface: #161A17;
+  --surface-2: #1F2521;
+  --ink: #F1F3EC;
+  --ink-muted: #9AA39C;
+  --line: #2A312C;
+  --brand: #17412F;
+  --on-brand: #F1F3EC;
+  --accent: #C8F03C;
+  --on-accent: #0F1A14;
+  --link: #C8F03C;
+  --hot: #FF5C7C;
+  --on-hot: #0D100E;
+  --blue: #6C93FF;
+  --on-blue: #0D100E;
+  --pitch: #24583C;
+  --court-amber: #A35B19;
+  --court-line: #FBFAF5;
+  --shadow: none;
+  --featured: #C8F03C;
+  --on-featured: #0F1A14;
+    color-scheme: dark;
+  }
+}

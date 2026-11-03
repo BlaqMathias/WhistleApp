@@ -1,0 +1,3 @@
+export default function Court({sport = "football"}) {
+  return <div className={`court-art ${sport}`} aria-hidden="true"><svg viewBox="0 0 360 120" fill="none" preserveAspectRatio="xMidYMid slice"><rect x="18" y="12" width="324" height="96" rx="3"/><path d="M180 12v96"/>{sport === "football" ? <><circle cx="180" cy="60" r="25"/><path d="M18 30h45v60H18m324-60h-45v60h45M18 45h18v30H18m324-30h-18v30h18"/></> : sport === "basketball" ? <><circle cx="180" cy="60" r="19"/><path d="M18 31h48v58H18m324-58h-48v58h48M66 31a33 33 0 0 1 0 58m228-58a33 33 0 0 0 0 58"/></> : <><path d="M115 12v96m130-96v96M18 36h324M18 84h324"/></>}</svg></div>;
+}
