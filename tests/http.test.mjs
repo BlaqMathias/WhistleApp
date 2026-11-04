@@ -32,6 +32,17 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    for(const path of ['/login','/signup']){const r=await request(path);assert.equal(r.status,200);const html=await r.text();assert.ok(!html.includes('Switch to dark theme'));assert.ok(!html.includes('Switch to light theme'));assert.ok(!html.includes('class="auth-theme"'));}
    for(const path of ['/events','/api/events','/api/registrations'])assert.equal((await request(path)).status,404,path);
    const manifest=await (await request('/manifest.json')).json();assert.equal(manifest.name,'Whistle');
+   assert.equal(manifest.display,'standalone');
+   assert.ok(manifest.icons.some(icon=>icon.purpose==='maskable'));
+   for(const icon of [...manifest.icons,{src:'/icons/whistle-32.png',sizes:'32x32'},{src:'/icons/apple-touch-icon.png',sizes:'180x180'}]){
+    const response=await request(icon.src);assert.equal(response.status,200,icon.src);
+    assert.match(response.headers.get('content-type'),/^image\/png/);
+    const bytes=Buffer.from(await response.arrayBuffer());
+    assert.equal([bytes.readUInt32BE(16),bytes.readUInt32BE(20)].join('x'),icon.sizes);
+   }
+   const loginPage=await (await request('/login')).text();
+   assert.match(loginPage,/aria-label="Install Whistle app"/);
+   assert.match(loginPage,/href="\/icons\/apple-touch-icon.png"/);
   });
   await t.test('Sign-in, campus restriction, HTTP-only cookies and admin-only API',async()=>{
    assert.equal((await request('/api/admin-data')).status,401);assert.equal((await request('/dashboard')).status,307);

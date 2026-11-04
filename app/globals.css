@@ -464,3 +464,26 @@ input.sr-only { position: absolute; top: 0; left: 0; width: 1px; height: 1px; mi
   .prediction-sport-filter { max-width: 480px; }
   .leaderboard-summary { grid-template-columns: 156px minmax(0, 1fr); gap: 24px; }
 }
+
+.auth-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.install-dialog { width: min(400px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); color: var(--ink); }
+.install-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.install-dialog p { margin: 16px 0 20px; }
+.tab-bar .rail-brand img { display: block; }
+@media (max-width: 370px) {
+  .app-bar, .public-header { padding-inline: 12px; }
+  .app-bar-row, .public-header { gap: 8px; }
+  .app-bar .actions, .public-header .actions { gap: 4px; }
+}
+
+.mobile-menu { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(86vw, 340px); height: 100dvh; max-height: 100dvh; border: 0; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.mobile-menu::backdrop { background: rgb(0 0 0 / .55); }
+.mobile-menu-content { padding: max(24px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom)); }
+.mobile-menu-content nav, .mobile-menu-account { display: grid; gap: 12px; }
+.mobile-menu-content nav a { display: flex; align-items: center; min-height: 48px; padding: 12px 16px; border-radius: var(--r-inner); background: var(--surface-2); text-decoration: none; }
+.student-menu .mobile-menu-content { min-height: 100%; }
+.student-menu nav a, .student-menu-install { gap: 12px; }
+.student-menu nav a[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.student-menu-account { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.student-menu-install { display: flex; align-items: center; min-height: 48px; padding: 12px 16px; border: 0; border-radius: var(--r-inner); background: var(--brand); color: var(--on-brand); text-align: left; font-weight: 600; }
+.ws-pill-mark { width: 16px; height: 16px; }

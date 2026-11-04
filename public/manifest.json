@@ -2,11 +2,19 @@
   "name": "Whistle",
   "short_name": "Whistle",
   "description": "Topfaith University campus sports, scores and fixtures",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F4F1E8",
   "theme_color": "#12372A",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "/manifest.json",
+      "id": "/"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -18,7 +26,13 @@
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

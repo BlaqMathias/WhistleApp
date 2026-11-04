@@ -1,8 +1,10 @@
 'use client';
 import {useEffect, useId, useRef, useState} from 'react';
 import Link from 'next/link';
+import StudentMenu from '@/components/student/StudentMenu';
 import Logo from './Logo';
 import Icon from './Icon';
+import InstallAppButton from "./InstallAppButton";
 import ThemeToggle from './ThemeToggle';
 import {accountHome} from '@/lib/account';
 import {HeaderSearchToggle,HeaderSearchPanel} from './HeaderSearch';
@@ -10,6 +12,7 @@ import {HeaderSearchToggle,HeaderSearchPanel} from './HeaderSearch';
 export default function PublicHeader({account}) {
  const dialog=useRef(null),[open,setOpen]=useState(false);
  const [searchOpen,setSearchOpen]=useState(false),searchId=useId();
+ const student=account&&!account.is_admin;
  const close=()=>dialog.current?.close();
  useEffect(()=>{
   if(!open)return;
@@ -25,14 +28,24 @@ export default function PublicHeader({account}) {
  return <header className="public-header">
   <Link className="brand" href={account?accountHome(account):'/login'} aria-label="Whistle home"><Logo/><span className="public-campus">TU sports platform</span></Link>
   <nav className="public-nav" aria-label="Homepage navigation">{links}</nav>
-  <div className="actions public-header-actions"><span className="actions public-desktop-actions"><ThemeToggle/></span>{account&&!account.is_admin&&<><HeaderSearchToggle open={searchOpen} onClick={()=>setSearchOpen(v=>!v)} id={searchId}/><Link className="icon-button" href="/student/notifications" aria-label="Notifications"><Icon name="bell"/></Link></>}<span className="actions public-desktop-actions">{accountLinks}</span>
-  <button className="icon-button public-menu-button" type="button" aria-label="Open menu" aria-haspopup="dialog" aria-controls="mobile-menu" aria-expanded={open} onClick={()=>{dialog.current.showModal();setOpen(true);}}><Icon name="menu"/></button></div>
-  {account&&!account.is_admin&&searchOpen&&<HeaderSearchPanel id={searchId} onNavigate={()=>setSearchOpen(false)}/>}
-  <dialog id="mobile-menu" className="mobile-menu" ref={dialog} aria-labelledby="mobile-menu-title" onClose={()=>setOpen(false)} onClick={e=>{if(e.target===e.currentTarget)close();}}>
+  <div className="actions public-header-actions">
+   {student ? <>
+    <span className="actions public-desktop-actions">{accountLinks}</span>
+    <ThemeToggle/>
+    <HeaderSearchToggle open={searchOpen} onClick={()=>setSearchOpen(value=>!value)} id={searchId}/>
+    <StudentMenu onOpen={()=>setSearchOpen(false)}/>
+   </> : <>
+    <span className="actions public-desktop-actions"><ThemeToggle/>{accountLinks}</span>
+    <InstallAppButton/>
+    <button className="icon-button public-menu-button" type="button" aria-label="Open menu" aria-haspopup="dialog" aria-controls="mobile-menu" aria-expanded={open} onClick={()=>{dialog.current.showModal();setOpen(true);}}><Icon name="menu"/></button>
+   </>}
+  </div>
+  {student&&searchOpen&&<HeaderSearchPanel id={searchId} onNavigate={()=>setSearchOpen(false)}/>}
+  {!student&&<dialog id="mobile-menu" className="mobile-menu" ref={dialog} aria-labelledby="mobile-menu-title" onClose={()=>setOpen(false)} onClick={e=>{if(e.target===e.currentTarget)close();}}>
    <div className="mobile-menu-content"><div className="section-header"><h2 id="mobile-menu-title">Menu</h2><button className="icon-button" type="button" aria-label="Close menu" onClick={close}><Icon name="close"/></button></div>
     <nav aria-label="Mobile navigation">{links}</nav><section className="mobile-menu-theme"><h3>Theme</h3><ThemeToggle segmented/></section>
     <div className="mobile-menu-account">{accountLinks}{account&&<form action="/api/auth/logout" method="post"><button className="sign-out" type="submit">Sign out</button></form>}</div>
    </div>
-  </dialog>
+  </dialog>}
  </header>;
 }

@@ -4,6 +4,7 @@ import { currentAccount } from "@/lib/auth";
 import { accountHome, matchReturnPath } from "@/lib/account";
 import { configured } from "@/lib/supabase/server";
 import LoginForm from "@/components/admin/LoginForm";
+import InstallAppButton from "@/components/shared/InstallAppButton";
 import Logo from "@/components/shared/Logo";
 import Court from "@/components/shared/Court";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function Login({ searchParams }) {
   return (
     <main id="main" className="login-page">
       <section className="login-identity"><Court/>
-        <Link href="/" className="brand" aria-label="Whistle home"><Logo /></Link>
+        <header className="auth-brand-row"><Link href="/" className="brand" aria-label="Whistle home"><Logo /></Link><InstallAppButton/></header>
         <div>
           <h1>
             The match
