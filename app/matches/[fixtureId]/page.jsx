@@ -26,7 +26,7 @@ export default async function Match({params,searchParams}) {
  const viewer=account?{is_admin:account.is_admin}:null;
  return <div className="public-site"><Refresh/><PublicHeader account={viewer}/><main id="main" className="fixture-detail">
   <Link href={account.is_admin?'/friendlies':'/student/fixtures'} className="back-link">All fixtures</Link>
-  <MatchBoard fixture={fixture} teams={teams} leagues={league?[league]:[]} featured showPlayerDetails={false}/>
+  <MatchBoard fixture={fixture} teams={teams} leagues={league?[league]:[]} featured clickable={false} showPlayerDetails={false}/>
   <FixtureEvents fixture={fixture} teams={teams}/>
   <FixtureTabs fixture={fixture} teams={teams} squads={squads} poll={poll} account={viewer} initialTab={initialTab}/>
   {league&&<section className="fixture-league-table"><div className="section-header"><h2>Standings</h2><span className="league-heading help"><LeagueMark league={league}/>{league.name}</span></div><StandingsPreview league={league} standings={standings}/></section>}

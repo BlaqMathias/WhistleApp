@@ -467,3 +467,83 @@ test('Last five uses only finished games in the same league, oldest first, inclu
  for(let i=0;i<2;i++)await db.exec(await file('migrations/20261102190000_fixture_pages_and_form.sql'));
  assert.deepEqual((await db.query('select * from fixtures order by id')).rows,before);
 });
+
+test('Personal prediction history includes archived picks, current corrected Ws and voids without exposing another student',async t=>{
+ const db=await database();t.after(()=>db.close());const ids=[];
+ for(let i=1;i<=3;i++)ids.push((await register(db,i)).profile.id);
+ const ts=await teams(db,'football',ids.slice(0,2)),l=await league(db,'football',ts);
+ const fixtures=(await db.query('select id from fixtures where league_id=$1 order by id',[l])).rows;
+ const done=fixtures[0].id,pending=fixtures[1].id;
+ await call(db,'student_vote',{p_fixture_id:done,p_student_id:ids[0],p_choice:'draw'});
+ await call(db,'student_vote',{p_fixture_id:done,p_student_id:ids[1],p_choice:'win_away'});
+ await call(db,'student_vote',{p_fixture_id:pending,p_student_id:ids[0],p_choice:'win_home'});
+ const history=()=>call(db,'student_prediction_history',{p_student_id:ids[0]});
+ let h=await history();assert.equal(h.entries.length,2);assert.ok(h.entries.every(e=>e.ws===null));
+ await call(db,'admin_start',{p_fixture_id:done});await call(db,'admin_end',{p_fixture_id:done});
+ h=await history();assert.equal(h.entries.find(e=>e.fixture.id===done).ws,50);
+ await call(db,'admin_correct_result',{p_fixture_id:done,p_home:1,p_away:0});
+ h=await history();assert.equal(h.entries.find(e=>e.fixture.id===done).ws,-25);
+ assert.equal((await call(db,'student_profile',{p_student_id:ids[0]})).prediction.ws,-25);
+ await call(db,'admin_archive',{p_entity:'leagues',p_id:l});
+ h=await history();assert.equal(h.entries.length,2);assert.equal(h.entries.find(e=>e.fixture.id===pending).poll_status,'void');assert.equal(h.leagues[0].status,'archived');
+ assert.equal((await call(db,'public_fixture',{p_fixture_id:done,p_student_id:ids[0]})).fixture.id,done);
+ assert.equal(await call(db,'public_fixture',{p_fixture_id:done,p_student_id:ids[2]}),null);
+ assert.equal(await call(db,'public_fixture',{p_fixture_id:done}),null);
+ await assert.rejects(call(db,'whistle_poll_snapshot',{p_fixture_id:done,p_student_id:ids[2]}));
+ assert.equal((await call(db,'student_prediction_history',{p_student_id:ids[2]})).entries.length,0);
+ for(const id of ids)assert.ok(!JSON.stringify(h).includes(id));assert.ok(!JSON.stringify(h).includes('@topfaith'));
+ const before=(await db.query('select * from ws_ledger order by vote_id')).rows;
+ for(let i=0;i<2;i++)await db.exec(await file('migrations/20261103223000_prediction_history.sql'));
+ assert.deepEqual(await history(),h);assert.deepEqual((await db.query('select * from ws_ledger order by vote_id')).rows,before);
+ for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(history(),{code:'42501'});await db.exec('reset role');}
+ await db.exec('set role service_role');assert.equal((await history()).entries.length,2);
+});
+
+test('Sport leaderboard ranks each sport independently and reflects result corrections', async t => {
+  const db = await database();
+  t.after(() => db.close());
+  const a = (await register(db, 1)).profile.id;
+  const b = (await register(db, 2)).profile.id;
+  await register(db, 3);
+
+  const ids = {};
+  for (const sport of ['football', 'basketball', 'volleyball']) {
+    const fixture = await call(db, 'admin_create_friendly', {
+      p_sport: sport, p_home_name: 'Home', p_away_name: 'Away',
+      ...(sport === 'volleyball' ? {p_best_of: 3} : {}),
+    });
+    ids[sport] = fixture;
+    const homeWins = sport !== 'basketball';
+    await call(db, 'student_vote', {p_fixture_id: fixture, p_student_id: a, p_choice: 'win_home'});
+    await call(db, 'student_vote', {p_fixture_id: fixture, p_student_id: b, p_choice: 'win_away'});
+    await call(db, 'admin_start', {p_fixture_id: fixture});
+    if (sport === 'volleyball') {
+      await call(db, 'admin_record_result', {p_fixture_id: fixture, p_home_sets: 2, p_away_sets: 0});
+    } else {
+      await call(db, 'admin_score', {p_fixture_id: fixture, p_side: homeWins ? 'home' : 'away', p_increment: 1});
+      await call(db, 'admin_end', {p_fixture_id: fixture});
+    }
+  }
+
+  const read = sport => call(db, 'student_sport_leaderboard', {p_student_id: a, p_sport: sport});
+  for (const [sport, expected] of [['football', 50], ['basketball', -25], ['volleyball', 50]]) {
+    const rows = await read(sport);
+    const me = rows.find(row => row.is_me);
+    assert.equal(me.ws, expected);
+    assert.equal(me.rank, expected > 0 ? 1 : 3);
+    assert.equal(me.predictions, 1);
+    assert.equal(me.correct, expected > 0 ? 1 : 0);
+    assert.ok(rows.every(row => !('student_id' in row) && !('matric_number' in row)));
+  }
+  const all = await call(db, 'student_leaderboard', {p_student_id: a});
+  assert.equal(all.find(row => row.is_me).ws, 75);
+  await call(db, 'admin_correct_result', {p_fixture_id: ids.football, p_home: 0, p_away: 1});
+  await db.exec(await file('migrations/20261104150000_prediction_sport_leaderboard.sql'));
+  assert.equal((await read('football')).find(row => row.is_me).ws, -25);
+  assert.equal((await read('volleyball')).find(row => row.is_me).ws, 50);
+
+  await db.exec('set role authenticated');
+  await assert.rejects(read('football'), {code: '42501'});
+  await db.exec('set role service_role');
+  assert.equal((await read('basketball')).find(row => row.is_me).ws, -25);
+});

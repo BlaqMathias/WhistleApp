@@ -527,7 +527,7 @@ create function public.whistle_poll_snapshot(p_fixture_id uuid,p_student_id uuid
 declare f fixtures; p polls;
 begin
  select * into f from fixtures where id=p_fixture_id;
- if not found or (f.league_id is not null and not exists(select 1 from leagues where id=f.league_id and status='active')) then raise exception 'Fixture not found.'; end if;
+ if not found or (f.league_id is not null and not exists(select 1 from leagues where id=f.league_id and status='active') and not exists(select 1 from poll_votes hv join polls hp on hp.id=hv.poll_id where hp.fixture_id=f.id and hv.student_id=p_student_id)) then raise exception 'Fixture not found.'; end if;
  select * into strict p from polls where fixture_id=f.id;
  return jsonb_build_object('fixture_id',f.id,'status',p.status,'can_vote',p.status='open' and f.status='scheduled',
  'my_choice',(select choice from poll_votes where poll_id=p.id and student_id=p_student_id),
@@ -808,7 +808,7 @@ returns jsonb language plpgsql set search_path=public as $$
 declare f fixtures; squads jsonb:='{}'; v_side text; v_team uuid; players jsonb;
 begin
  select * into f from fixtures where id=p_fixture_id;
- if not found or (f.league_id is not null and not exists(select 1 from leagues where id=f.league_id and status='active')) then return null; end if;
+ if not found or (f.league_id is not null and not exists(select 1 from leagues where id=f.league_id and status='active') and not exists(select 1 from poll_votes hv join polls hp on hp.id=hv.poll_id where hp.fixture_id=f.id and hv.student_id=p_student_id)) then return null; end if;
  if p_student_id is not null then perform whistle_student(p_student_id); end if;
  foreach v_side in array array['home','away'] loop
   v_team:=case when v_side='home' then f.home_team_id else f.away_team_id end;
@@ -843,5 +843,64 @@ grant usage on schema public to anon,authenticated,service_role;
 -- Prevent future functions/tables reverting to PUBLIC execute by accident.
 alter default privileges in schema public revoke execute on functions from public;
 alter default privileges in schema public revoke all on tables from anon,authenticated;
+notify pgrst, 'reload schema';
+commit;
+
+-- Personal prediction history, including the student's archived league picks.
+create index if not exists poll_votes_student_history on public.poll_votes(student_id,updated_at desc,id);
+create or replace function public.student_prediction_history(p_student_id uuid) returns jsonb language plpgsql set search_path=public as $$
+begin
+ perform whistle_student(p_student_id);
+ return jsonb_build_object(
+  'entries',(select coalesce(jsonb_agg(jsonb_build_object(
+   'fixture',(to_jsonb(f)-'player_details')||jsonb_build_object('player_details',whistle_public_player_details(f.player_details)),
+   'choice',v.choice,'ws',w.delta,'poll_status',p.status,'predicted_at',v.updated_at
+  ) order by v.updated_at desc,v.id),'[]') from poll_votes v join polls p on p.id=v.poll_id join fixtures f on f.id=p.fixture_id left join ws_ledger w on w.vote_id=v.id where v.student_id=p_student_id),
+  'teams',(select coalesce(jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,'sport',t.sport,'logo_initials',t.logo_initials,'logo_path',t.logo_path)),'[]') from teams t where exists(select 1 from poll_votes v join polls p on p.id=v.poll_id join fixtures f on f.id=p.fixture_id where v.student_id=p_student_id and t.id in(f.home_team_id,f.away_team_id))),
+  'leagues',(select coalesce(jsonb_agg(to_jsonb(l)),'[]') from leagues l where exists(select 1 from poll_votes v join polls p on p.id=v.poll_id join fixtures f on f.id=p.fixture_id where v.student_id=p_student_id and f.league_id=l.id))
+ );
+end $$;
+revoke execute on function public.student_prediction_history(uuid),public.whistle_poll_snapshot(uuid,uuid),public.public_fixture(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.student_prediction_history(uuid),public.whistle_poll_snapshot(uuid,uuid),public.public_fixture(uuid,uuid) to service_role;
+
+begin;
+
+-- Rank the same campus accounts using settlements for the selected sport.
+create or replace function public.student_sport_leaderboard(p_student_id uuid, p_sport public.sport)
+returns jsonb language plpgsql stable set search_path=public as $$
+begin
+  perform whistle_student(p_student_id);
+
+  return (
+    with settled as (
+      select w.student_id,
+             sum(w.delta) as ws,
+             count(*)::integer as predictions,
+             count(*) filter (where w.delta = 50)::integer as correct
+      from ws_ledger w
+      join fixtures f on f.id = w.fixture_id
+      where f.sport = p_sport
+      group by w.student_id
+    ), totals as (
+      select s.id as student_id, s.name, s.faculty,
+             coalesce(w.ws, 0) as ws,
+             coalesce(w.predictions, 0) as predictions,
+             coalesce(w.correct, 0) as correct
+      from students s
+      left join settled w on w.student_id = s.id
+      where not s.is_admin
+    ), ranked as (
+      select (rank() over (order by ws desc))::integer as rank, *,
+             student_id = p_student_id as is_me
+      from totals
+    )
+    select coalesce(jsonb_agg(to_jsonb(r) - 'student_id' order by r.rank, r.name, r.student_id), '[]')
+    from ranked r
+  );
+end $$;
+
+revoke execute on function public.student_sport_leaderboard(uuid, public.sport) from public, anon, authenticated;
+grant execute on function public.student_sport_leaderboard(uuid, public.sport) to service_role;
+
 notify pgrst, 'reload schema';
 commit;

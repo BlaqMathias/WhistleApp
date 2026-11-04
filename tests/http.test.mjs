@@ -155,6 +155,27 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    }
    assert.equal((await value('/api/leaderboard',{session:student})).find(r=>r.is_me).ws,before);
   });
+  await t.test('Sport filters switch leaderboard scores and personal match history', async () => {
+   const scopes = [
+    ['football', 'Football', -25, 'Visitors ' + tag],
+    ['basketball', 'Basketball', 0, 'cancel Home ' + tag],
+    ['volleyball', 'Volleyball', 50, 'Five Home ' + tag],
+   ];
+   for (const [sport, label, balance, team] of scopes) {
+    const leaderboard = await request('/student/leaderboard?sport=' + sport, {session: student});
+    assert.equal(leaderboard.status, 200);
+    const page = await leaderboard.text();
+    assert.ok(page.includes(label + ' standings'));
+    assert.ok(page.includes(`<strong>${balance}</strong>`));
+    const history = await request('/student/predictions?sport=' + sport, {session: student});
+    assert.equal(history.status, 200);
+    const cards = [...(await history.text()).matchAll(/<article class="fixture-item[^"]*"[\s\S]*?<\/article>/g)];
+    assert.ok(cards.some(([card]) => card.includes(team)));
+    for (const [, , , otherTeam] of scopes.filter(([other]) => other !== sport)) {
+     assert.ok(cards.every(([card]) => !card.includes(otherTeam)));
+    }
+   }
+  });
   await t.test('Student pages, preferences, feedback review and profile privacy are fully connected',async()=>{
    for(const path of ['/student','/student/fixtures','/student/standings','/student/live','/student/leaderboard','/student/notifications','/student/feedback','/student/profile']){
     const r=await request(path,{session:student});assert.equal(r.status,200,path);const html=await r.text();assert.ok(!html.includes('Pending payments'));assert.ok(!html.includes('Create Fest'));assert.ok(!html.includes('admin-test@topfaith.edu.ng'));
@@ -261,6 +282,14 @@ test('Full rebuilt app: HTTP routes, SQL integration and access boundaries',{tim
    const highlights=html.match(/<section class="fixture-events"[\s\S]*?<\/section>/)?.[0];assert.ok(highlights);assert.ok(!highlights.includes('Assist:'));assert.ok(html.includes('aria-label="1 assist"'));
    const bars=[...html.matchAll(/<progress[^>]+aria-label="([^"]+)"/g)];assert.ok(bars.length);assert.ok(bars.every(m=>m[1].endsWith('%')));assert.ok(!bars.some(m=>m[1].includes('votes')));
    const sprite=await request('/icons/ui-icons.svg');assert.equal(sprite.status,200);const svg=await sprite.text();for(const id of ['football','assist','search','users'])assert.ok(svg.includes(`id="${id}"`));
+  });
+  await t.test('Profile Ws, prediction history, header search and entire fixture-card links use authenticated data',async()=>{
+   assert.equal((await request('/api/search')).status,401);assert.equal((await request('/api/search',{session:admin})).status,403);
+   const search=await value('/api/search?scope=tables',{session:student});assert.ok(search.options.length);assert.ok(search.options.some(o=>o.kind==='League'));assert.ok(!JSON.stringify(search).includes('@topfaith'));assert.ok(!JSON.stringify(search).includes('student_id'));
+   let html=await (await request('/student/profile',{session:student})).text();assert.match(html,/profile-ws-circle/);assert.match(html,/Prediction history/);assert.match(html,/href="\/student\/predictions"/);assert.match(html,/href="\/student\/live"/);assert.match(html,/Open search/);assert.match(html,/notification-preference/);assert.ok(!html.includes('New updates will appear in your feed.'));
+   let r=await request('/student/predictions');assert.equal(r.status,307);r=await request('/student/predictions',{session:admin});assert.equal(r.status,307);
+   html=await (await request(`/student/predictions?student_id=${otherProfile.id}`,{session:student})).text();assert.match(html,/Prediction history/);assert.match(html,/Your pick:/);assert.ok(!html.includes('student2@topfaith.edu.ng'));
+   html=await (await request('/student/fixtures',{session:student})).text();const cards=[...html.matchAll(/<article class="fixture-item[^"]*"[\s\S]*?<\/article>/g)].map(m=>m[0]);assert.ok(cards.length);for(const card of cards){assert.match(card,/class="fixture-card-link"[^>]+href="\/matches\//);assert.ok(!/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*?<a\b/.test(card));assert.match(card,/More options for/);}
   });
   await t.test('Logout clears the session cookies',async()=>{
    const r=await request('/api/auth/logout',{session:student,method:'POST'});assert.equal(r.status,303);assert.ok(r.headers.getSetCookie().some(h=>/Max-Age=0/.test(h)));
