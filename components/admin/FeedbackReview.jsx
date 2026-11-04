@@ -1,7 +1,7 @@
 "use client";
 import Badge from "@/components/shared/Badge";
 import Button from "@/components/shared/Button";
-import { useMutation, send, FormStatus } from "@/components/shared/FormState";
+import { useMutation, send } from "@/components/shared/FormState";
 import { dateTime } from "@/lib/format";
 import { FEEDBACK_CATEGORIES } from "@/lib/constants";
 export default function FeedbackReview({ item, student }) {
@@ -30,7 +30,7 @@ export default function FeedbackReview({ item, student }) {
             onClick={() =>
               m.run(
                 () => send(`/api/feedback/${item.id}`, { status }, "PATCH"),
-                "Feedback updated.",
+                status === "resolved" ? "Feedback resolved." : "Feedback marked as reviewed.",
               )
             }
           >
@@ -38,7 +38,6 @@ export default function FeedbackReview({ item, student }) {
           </Button>
         ))}
       </div>
-      <FormStatus {...m} />
     </article>
   );
 }

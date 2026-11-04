@@ -4,13 +4,13 @@ import {createPortal} from 'react-dom';
 import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 import {matchHref} from '@/lib/account';
-import {send,FormStatus} from './FormState';
+import {send} from './FormState';
 import Icon from './Icon';
 import {notify} from './Toast';
 
 export default function FixtureActions({fixture}){
  const [open,setOpen]=useState(false),[submenu,setSubmenu]=useState(false),[poll,setPoll]=useState(null),[canPredict,setCanPredict]=useState(false);
- const [loading,setLoading]=useState(false),[pending,setPending]=useState(false),[error,setError]=useState('');
+ const [loading,setLoading]=useState(false),[pending,setPending]=useState(false);
  const [position,setPosition]=useState({left:8,top:8,side:'left'});
  const trigger=useRef(null),layer=useRef(null),menu=useRef(null),prediction=useRef(null),choicesMenu=useRef(null),busy=useRef(false),id=useId(),router=useRouter();
  const choices=[['win_home','Home'],...(fixture.sport==='volleyball'?[]:[['draw','Draw']]),['win_away','Away']];
@@ -33,8 +33,8 @@ export default function FixtureActions({fixture}){
  },[open,submenu]);
  useEffect(()=>{
   if(!submenu)return;
-  const controller=new AbortController();setLoading(true);setPoll(null);setError('');choicesMenu.current?.focus();
-  readPoll(controller.signal).then(data=>{setPoll(data.poll);setCanPredict(data.can_predict);}).catch(e=>{if(e.name!=='AbortError')setError(e.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+  const controller=new AbortController();setLoading(true);setPoll(null);choicesMenu.current?.focus();
+  readPoll(controller.signal).then(data=>{setPoll(data.poll);setCanPredict(data.can_predict);}).catch(e=>{if(!controller.signal.aborted)notify(e.message,'error');}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
  },[submenu,fixture.id,fixture.status]);
  useLayoutEffect(()=>{
@@ -47,7 +47,7 @@ export default function FixtureActions({fixture}){
   }
   place();window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
   return()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);};
- },[open,submenu,loading,poll,error]);
+ },[open,submenu,loading,poll]);
  function keyboard(e,ref){
   if(e.key==='ArrowLeft'&&ref===choicesMenu){e.preventDefault();setSubmenu(false);prediction.current?.focus();return;}
   if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;
@@ -56,9 +56,9 @@ export default function FixtureActions({fixture}){
  }
  async function vote(choice){
   if(busy.current||!canPredict||!poll?.can_vote||fixture.status!=='scheduled')return;
-  busy.current=true;setPending(true);setError('');
+  busy.current=true;setPending(true);
   try{await send(`/api/polls/${fixture.id}/vote`,{choice});close();trigger.current?.focus();notify('Prediction set');router.refresh();}
-  catch(e){setError(e.message);try{const data=await readPoll();setPoll(data.poll);setCanPredict(data.can_predict);}catch{setPoll(null);}}
+  catch(e){notify(e.message,'error');try{const data=await readPoll();setPoll(data.poll);setCanPredict(data.can_predict);}catch{setPoll(null);}}
   finally{busy.current=false;setPending(false);}
  }
  return <div className="fixture-more">
@@ -73,7 +73,6 @@ export default function FixtureActions({fixture}){
     {loading&&<p className="help" role="status">Loading…</p>}
     {choices.map(([choice,label])=><button type="button" role="menuitemradio" aria-checked={poll?.my_choice===choice} aria-label={label} key={choice} disabled={loading||pending||!canPredict||!poll?.can_vote||fixture.status!=='scheduled'} onClick={()=>vote(choice)}>{label}{poll?.my_choice===choice&&<Icon name="check"/>}</button>)}
     {!loading&&poll&&(!canPredict||!poll.can_vote||fixture.status!=='scheduled')&&<p className="help">{!canPredict?'Students only.':poll.status==='void'?'Predictions void.':'Voting closed.'}</p>}
-    <FormStatus error={error}/>
    </nav>}
   </div>,document.body)}
  </div>;

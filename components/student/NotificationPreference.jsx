@@ -1,6 +1,6 @@
 "use client";
 import Button from "@/components/shared/Button";
-import { useMutation, send, FormStatus } from "@/components/shared/FormState";
+import { useMutation, send } from "@/components/shared/FormState";
 
 export default function NotificationPreference({ enabled }) {
   const mutation = useMutation();
@@ -14,7 +14,6 @@ export default function NotificationPreference({ enabled }) {
         </Button>
         {!enabled&&<span className="help">New updates are paused. Your earlier notifications remain in your feed.</span>}
       </div>
-      <FormStatus error={mutation.error} success={mutation.success} />
     </section>
   );
 }

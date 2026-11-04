@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Button from "@/components/shared/Button";
-import { useMutation, send, FormStatus } from "@/components/shared/FormState";
+import { useMutation, send } from "@/components/shared/FormState";
 import { FEEDBACK_CATEGORIES, FEEDBACK_MAX_LENGTH } from "@/lib/constants";
 import { feedbackDetails } from "@/lib/feedback";
 
@@ -32,7 +32,6 @@ export default function FeedbackForm() {
         <textarea name="message" value={message} onChange={(event) => setMessage(event.target.value)} maxLength={FEEDBACK_MAX_LENGTH} required disabled={mutation.pending} aria-describedby="feedback-count" placeholder="Tell us what would help, what went wrong, or how to reproduce a bug." />
       </label>
       <p className="help" id="feedback-count">{message.length.toLocaleString("en-NG")} / {FEEDBACK_MAX_LENGTH.toLocaleString("en-NG")} characters</p>
-      <FormStatus error={mutation.error} success={mutation.success} />
       <Button disabled={mutation.pending}>{mutation.pending ? "Sending…" : "Send feedback"}</Button>
     </form>
   );

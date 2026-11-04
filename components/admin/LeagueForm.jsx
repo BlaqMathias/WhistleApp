@@ -2,7 +2,7 @@
 import {useRef,useState} from 'react';
 import Link from 'next/link';
 import Button from '@/components/shared/Button';
-import {useMutation,send,FormStatus} from '@/components/shared/FormState';
+import {useMutation,send} from '@/components/shared/FormState';
 import {SPORTS,SPORT_NAMES,LOGO_TYPES,LOGO_MAX_BYTES} from '@/lib/constants';
 import {uploadLogo} from '@/lib/logoUpload';
 export default function LeagueForm({teams}){
@@ -28,7 +28,7 @@ export default function LeagueForm({teams}){
   </fieldset>
   <label>League logo (optional)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp" disabled={m.pending}/><span className="help">PNG, JPG or WebP up to 2 MB. Leave empty to use initials.</span></label>
   <p className="form-note">{selected.length} teams / {selected.length*(selected.length-1)} home-and-away fixtures. You can edit dates, add matches or remove unstarted fixtures afterward. A player can represent one team in this league.</p>
-  <FormStatus {...m}/><Button disabled={m.pending}>{createdId?'Retry logo and open league':'Create league and draft fixtures'}</Button>
+  <Button disabled={m.pending}>{createdId?'Retry logo and open league':'Create league and draft fixtures'}</Button>
   {createdId&&<Link className="quiet-link" href={`/leagues/${createdId}`}>Open created league</Link>}
  </form>;
 }

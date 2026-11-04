@@ -1,6 +1,6 @@
 "use client";
 import Button from "@/components/shared/Button";
-import { useMutation, send, FormStatus } from "@/components/shared/FormState";
+import { useMutation, send } from "@/components/shared/FormState";
 export default function ArchiveButton({ entity, id, label }) {
   const m = useMutation();
   return (
@@ -28,7 +28,6 @@ export default function ArchiveButton({ entity, id, label }) {
           Archive {label.toLowerCase()}
         </Button>
       </div>
-      <FormStatus {...m} />
     </div>
   );
 }
